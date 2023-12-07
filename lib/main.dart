@@ -8,6 +8,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as Path;
 import 'package:path_provider/path_provider.dart';
 
+import 'historical_page.dart';
+
 void main() {
   runApp(MyApp());
 }
@@ -34,7 +36,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Конвектор валют',
+      title: 'Currency Converter',
       home: CurrencyConverter(),
     );
   }
@@ -54,6 +56,8 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
   List<ConversionHistory> conversionHistory = [];
 
   late Database _database;
+
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -112,7 +116,6 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
     }
   }
 
-  // Метод для удаления всех записей из истории
   Future<void> clearConversionHistory() async {
     await _database.delete('conversion_history');
     loadConversionHistory();
@@ -139,7 +142,6 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
           setState(() {
             result = data['result'];
 
-            // Добавление записи в историю
             conversionHistory.add(ConversionHistory(
               id: 0,
               timestamp: DateTime.now(),
@@ -149,7 +151,6 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
               result: result,
             ));
 
-            // Сохранение истории
             saveConversionHistory();
           });
         } else {
@@ -174,116 +175,186 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Конвектор валют'),
+        title: Text('Конвертер валют'),
         centerTitle: true,
       ),
-      body: Container(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Flexible(
-                  child: TextField(
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) {
-                      setState(() {
-                        amount = double.parse(value);
-                      });
-                    },
-                    decoration: InputDecoration(labelText: 'Сумма'),
-                  ),
+      drawer: _buildDrawer(),
+      body: _currentIndex == 0
+          ? _buildConversionPage()
+          : _buildHistoryPage(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.compare_arrows),
+            label: 'Конвертер',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'История',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        children: [
+          ListTile(
+            title: Text('Конвертировать валюту'),
+            onTap: () {
+              setState(() {
+                _currentIndex = 0;
+                Navigator.pop(context); // Закрываем меню
+              });
+            },
+          ),
+          ListTile(
+            title: Text('Просмотреть валюту по дате'),
+            onTap: () async {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => HistoricalPage()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversionPage() {
+    return Container(
+      padding: const EdgeInsets.all(30.0),
+
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Flexible(
+                child: TextField(
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) {
+                    setState(() {
+                      amount = double.parse(value);
+                    });
+                  },
+                  decoration: InputDecoration(labelText: 'Сумма'),
                 ),
-                SizedBox(width: 20),
-                Flexible(
-                  child: DropdownButton<String>(
-                    value: fromCurrency,
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        fromCurrency = newValue!;
-                      });
-                    },
-                    items: <String>['USD', 'EUR', 'GBP', 'JPY', 'RUB',"AED","AFN"]
-                        .map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                Icon(Icons.arrow_forward),
-                Flexible(
-                  child: DropdownButton<String>(
-                    value: toCurrency,
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        toCurrency = newValue!;
-                      });
-                    },
-                    items: <String>['USD', 'EUR', 'GBP', 'JPY', 'RUB',"AED","AFN"]
-                        .map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: convertCurrency,
-              child: Text('Конвектировать'),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: clearConversionHistory,
-              child: Text('Очистить историю'),
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Результат: $result $toCurrency',
-              style: TextStyle(fontSize: 18),
-            ),
-            SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
-                itemCount: conversionHistory.length,
-                itemBuilder: (context, index) {
-                  final historyItem = conversionHistory[index];
-                  return ListTile(
-                    title: Text(
-                      'Конвектированно ${historyItem.amount} ${historyItem.fromCurrency} в ${historyItem.result} ${historyItem.toCurrency}',
-                    ),
-                    subtitle: Text(
-                      'Время: ${DateFormat.yMd().add_Hms().format(historyItem.timestamp)}',
-                    ),
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete),
-                      onPressed: () {
-                        // Удаление записи из базы данных
-                        _database.delete('conversion_history',
-                            where: 'id = ?', whereArgs: [historyItem.id]);
-                        loadConversionHistory();
-                      },
-                    ),
-                  );
-                },
               ),
+              SizedBox(width: 20),
+              Flexible(
+                child: DropdownButton<String>(
+                  value: fromCurrency,
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      fromCurrency = newValue!;
+                    });
+                  },
+                  items: <String>['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'AED']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
+              ),
+              Icon(Icons.arrow_forward),
+              Flexible(
+                child: DropdownButton<String>(
+                  value: toCurrency,
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      toCurrency = newValue!;
+                    });
+                  },
+                  items: <String>['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'AED']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          Text(
+            'Результат: $result $toCurrency',
+            style: TextStyle(fontSize: 18),
+          ),
+          SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: convertCurrency,
+            child: Text('Конвертировать'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryPage() {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: clearConversionHistory,
+            child: Text('Очистить историю'),
+          ),
+          SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: conversionHistory.length,
+              itemBuilder: (context, index) {
+                final historyItem = conversionHistory[index];
+                return ListTile(
+                  title: Text(
+                    'Конвертировано ${historyItem.amount} ${historyItem.fromCurrency} в ${historyItem.result} ${historyItem.toCurrency}',
+                  ),
+                  subtitle: Text(
+                    'Время: ${DateFormat.yMd().add_Hms().format(historyItem.timestamp)}',
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete),
+                    onPressed: () {
+                      _database.delete('conversion_history',
+                          where: 'id = ?', whereArgs: [historyItem.id]);
+                      loadConversionHistory();
+                    },
+                  ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openHistoricalPage(String date) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HistoricalPage(),
       ),
     );
   }
